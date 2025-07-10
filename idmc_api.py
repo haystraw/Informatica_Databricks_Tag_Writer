@@ -3,7 +3,7 @@ import json
 
 debugFlag = False
 
-idmc_api_version = 20231202.1
+idmc_api_version = 202500709
 default_infa_url_base = "https://dm-us.informaticacloud.com"
 default_infa_hawk_url_base = "https://cdgc-api.dm-us.informaticacloud.com"
 
@@ -20,9 +20,9 @@ class INFA_DG_Object:
     def fetchOtherRelationships(self):
 
         ## Search for Glossary Relatopnsips
-        payload = json.dumps({
+        payload_dict = {
             "from": 0,
-            "size": 10000,
+            "size": 100,
             "query": {
                 "bool": {
                     "filter": [
@@ -39,11 +39,13 @@ class INFA_DG_Object:
                     }
                 }
             ]
-        })
-        response = self.session.DG_elastic_search(payload)
-        response_data = response
+        }
 
-        for search_obj in response_data['hits']['hits']:
+        results = self.session.elasticSearchResults(payload_dict)
+
+        self.debug(f"Total results from fetchOtherRelationships elasticsearch: {len(results)}")
+
+        for search_obj in results:
             
             try:
                 raw_map = search_obj['sourceAsMap']
@@ -66,9 +68,9 @@ class INFA_DG_Object:
                 pass        
 
         ## Search for Classification Relatopnsips
-        payload = json.dumps({
+        payload_dict = {
             "from": 0,
-            "size": 10000,
+            "size": 100,
             "query": {
                 "bool": {
                     "filter": [
@@ -85,11 +87,13 @@ class INFA_DG_Object:
                     }
                 }
             ]
-        })
-        response = self.session.DG_elastic_search(payload)
-        response_data = response
+        }
 
-        for search_obj in response_data['hits']['hits']:
+        results = self.session.elasticSearchResults(payload_dict)
+
+        self.debug(f"Total results from fetchOtherRelationships elasticsearch: {len(results)}")
+
+        for search_obj in results:
             
             try:
                 raw_map = search_obj['sourceAsMap']
@@ -110,10 +114,9 @@ class INFA_DG_Object:
             except:
                 pass
 
-
     def fetchObjects(self):
         print(f"INFO: Fetching Detailed Information for {self.name}")
-        payload = json.dumps({
+        payload_dict = {
         "from": 0,
         "size": 1000,
         "query": {
@@ -128,12 +131,13 @@ class INFA_DG_Object:
             }
             }
         ]
-        })
+        }
 
-        response = self.session.DG_elastic_search(payload)
-        response_data = response
+        results = self.session.elasticSearchResults(payload_dict)
+
+        self.debug(f"Total results from fetchObjects elasticsearch: {len(results)}")
         
-        for obj in response_data['hits']['hits']:
+        for obj in results:
             try:
                 if obj['sourceAsMap']['elementType'] == 'OBJECT':
                     raw_map = obj['sourceAsMap']
@@ -144,7 +148,7 @@ class INFA_DG_Object:
             except:
                 pass
 
-        for obj in response_data['hits']['hits']:
+        for obj in results:
             try:
                 if obj['sourceAsMap']['elementType'] == 'RELATIONSHIP':
                     raw_map = obj['sourceAsMap']
@@ -319,6 +323,8 @@ class INFASession:
         'Content-Type': 'application/json'
         }
 
+
+        self.debug(f"idmc_api.get_sessionid_and_orgid: Running API: {url} with payload: {payload}")
         response = requests.request("POST", url, headers=headers, data=payload)
         response_data = response.json()
         session_id = response_data['sessionId']
@@ -335,6 +341,7 @@ class INFASession:
         headers['IDS-SESSION-ID'] = session_id
         headers['X-INFA-ORG-ID'] =  org_id
 
+        self.debug(f"idmc_api.get_token: Running API: {url}")
         response = requests.request("GET", url, headers=headers, data=payload)
         response_data = response.json()
 
@@ -357,6 +364,33 @@ class INFASession:
         self.debug(f"idmc_api.DG_elastic_search: Raw Response for {url}:")
         self.debug(f"{response.text}")
         return response.json()
+    
+    def elasticSearchResults(self, payload_dict):
+        ## Calling multipl elastic searches to deal with pagination.
+        all_results = []
+        from_offset = payload_dict.get('from', 0)
+        size = payload_dict.get('size', 100)  # default page size
+
+        while True:
+            payload_dict['from'] = from_offset
+            payload_dict['size'] = size
+
+            payload = json.dumps(payload_dict)
+            response = self.DG_elastic_search(payload)
+
+            results = response['hits']['hits']
+            total_hits = response['hits']['totalHits']
+            total_hits_this_page = len(results)
+
+            all_results.extend(results)
+            
+            from_offset += total_hits_this_page
+            
+            # Break if no more hits or we retrieved all
+            if total_hits_this_page == 0 or from_offset >= total_hits:
+                break
+
+        return all_results    
 
     def DG_publish(self, json_payload):
         url = self.hawk_url_base+"/ccgf-contentv2/api/v1/publish"
@@ -393,9 +427,9 @@ class INFASession:
 
 
     def fetchResources(self):
-        payload = json.dumps({
+        payload_dict = {
         "from": 0,
-        "size": 1000,
+        "size": 10000,
         "query": {
             "term": {
             "core.classType": "core.Resource"
@@ -408,11 +442,14 @@ class INFASession:
             }
             }
         ]
-        })
+        }
 
-        response_data = self.DG_elastic_search(payload)
+        results = self.elasticSearchResults(payload_dict)
 
-        for obj in response_data['hits']['hits']:
+        self.debug(f"Total results from fetchOtherRelationships elasticsearch: {len(results)}")
+
+
+        for obj in results:
             raw_map = obj['sourceAsMap']
             try:
                 resource = INFA_DG_Object(self, raw_map)
@@ -424,7 +461,7 @@ class INFASession:
     def fetchClassifications(self):
         self.fetchParentPolicyOfClassifications()
 
-        payload = json.dumps({
+        payload_dict = {
         "from": 0,
         "size": 1000,
         "query": {
@@ -439,11 +476,14 @@ class INFASession:
             }
             }
         ]
-        })
+        }
 
-        response_data = self.DG_elastic_search(payload)
+        results = self.elasticSearchResults(payload_dict)
 
-        for obj in response_data['hits']['hits']:
+        self.debug(f"Total results from fetchClassifications (DataElementClassification) elasticsearch: {len(results)}")
+
+
+        for obj in results:
             raw_map = obj['sourceAsMap']
             try:
                 classification = INFA_DG_Object(self, raw_map)
@@ -453,7 +493,8 @@ class INFASession:
             except:
                 pass
 
-        payload = json.dumps({
+
+        payload_dict = {
         "from": 0,
         "size": 1000,
         "query": {
@@ -468,11 +509,13 @@ class INFASession:
             }
             }
         ]
-        })
+        }
 
-        response_data = self.DG_elastic_search(payload)
+        results = self.elasticSearchResults(payload_dict)
 
-        for obj in response_data['hits']['hits']:
+        self.debug(f"Total results from fetchClassifications (DataEntityClassification) elasticsearch: {len(results)}")
+
+        for obj in results:
             raw_map = obj['sourceAsMap']
             try:
                 classification = INFA_DG_Object(self, raw_map)
@@ -483,10 +526,11 @@ class INFASession:
 
     def fetchParentPolicyOfClassifications(self):
 
-        result_objects = []
-        payload = json.dumps({
+        ## result_objects = []
+
+        payload_dict = {
         "from": 0,
-        "size": 1000,
+        "size": 10000,
         "query": {
             "bool": {
                 "filter": [
@@ -502,10 +546,14 @@ class INFASession:
             }
             }
         ]
-        })
+        }
 
-        response_data = self.DG_elastic_search(payload)
-        search_results = response_data['hits']['hits']
+        results = self.elasticSearchResults(payload_dict)
+
+        self.debug(f"Total results from fetchParentPolicyOfClassifications elasticsearch: {len(results)}")
+
+
+        search_results = results
         for res in search_results:
             this_source_identity = res['sourceAsMap']['core.sourceIdentity']
             this_target_identity = res['sourceAsMap']['core.targetIdentity']
@@ -528,10 +576,11 @@ class INFASession:
 
     def fetchParentPolicyOfBusinessTerms(self):
 
-        result_objects = []
-        payload = json.dumps({
+        ## result_objects = []
+
+        payload_dict = {
         "from": 0,
-        "size": 1000,
+        "size": 10000,
         "query": {
             "bool": {
                 "filter": [
@@ -547,11 +596,13 @@ class INFASession:
             }
             }
         ]
-        })
+        }
 
-        response_data = self.DG_elastic_search(payload)
-        search_results = response_data['hits']['hits']
-        for res in search_results:
+        results = self.elasticSearchResults(payload_dict)
+
+        self.debug(f"Total results from fetchParentPolicyOfBusinessTerms elasticsearch: {len(results)}")
+
+        for res in results:
             this_source_identity = res['sourceAsMap']['core.sourceIdentity']
             this_target_identity = res['sourceAsMap']['core.targetIdentity']
             this_relationship = {"name": this_source_identity+" "+this_target_identity, "source_identity": this_source_identity, "target_identity": this_target_identity}
@@ -574,9 +625,9 @@ class INFASession:
 
     def fetchPolicies(self):
 
-        payload = json.dumps({
+        payload_dict = {
         "from": 0,
-        "size": 1000,
+        "size": 10000,
         "query": {
             "term": {
             "core.classType": "com.infa.ccgf.models.governance.Policy"
@@ -589,11 +640,13 @@ class INFASession:
             }
             }
         ]
-        })
+        }
 
-        response_data = self.DG_elastic_search(payload)
+        results = self.elasticSearchResults(payload_dict)
 
-        for obj in response_data['hits']['hits']:
+        self.debug(f"Total results from fetchOtherRelationships elasticsearch: {len(results)}")        
+
+        for obj in results:
             raw_map = obj['sourceAsMap']
             try:
                 pol = INFA_DG_Object(self, raw_map)
@@ -606,9 +659,9 @@ class INFASession:
 
         self.fetchParentPolicyOfBusinessTerms()
 
-        payload = json.dumps({
+        payload_dict = {
         "from": 0,
-        "size": 1000,
+        "size": 10000,
         "query": {
             "term": {
             "core.classType": "com.infa.ccgf.models.governance.BusinessTerm"
@@ -621,11 +674,13 @@ class INFASession:
             }
             }
         ]
-        })
+        }
 
-        response_data = self.DG_elastic_search(payload)
+        results = self.elasticSearchResults(payload_dict)
 
-        for obj in response_data['hits']['hits']:
+        self.debug(f"Total results from fetchBusinessTerms elasticsearch: {len(results)}")        
+
+        for obj in results:
             raw_map = obj['sourceAsMap']
             try:
                 term = INFA_DG_Object(self, raw_map)
@@ -638,15 +693,13 @@ class INFASession:
 
     def getObjectByID(self, identity):
 
-
         for o in self.all_objects:
             if o.identity == identity:
                 return o
 
-
-        payload = json.dumps({
+        payload_dict = {
         "from": 0,
-        "size": 1000,
+        "size": 10000,
         "query": {
             "bool": {
             "filter": [
@@ -665,11 +718,13 @@ class INFASession:
             }
             }
         ]
-        })  
+        }
 
-        response_data = self.DG_elastic_search(payload)  
+        results = self.elasticSearchResults(payload_dict)
 
-        for obj in response_data['hits']['hits']:
+        self.debug(f"Total results from getObjectByID elasticsearch: {len(results)}")
+
+        for obj in results:
             raw_map = obj['sourceAsMap']
             try:
                 o = INFA_DG_Object(self, raw_map)
