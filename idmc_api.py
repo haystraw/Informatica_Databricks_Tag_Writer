@@ -3,7 +3,7 @@ import json
 
 debugFlag = False
 
-idmc_api_version = 202500709
+idmc_api_version = 20250710
 default_infa_url_base = "https://dm-us.informaticacloud.com"
 default_infa_hawk_url_base = "https://cdgc-api.dm-us.informaticacloud.com"
 
@@ -398,6 +398,7 @@ class INFASession:
         headers = {}
         headers['Content-Type'] = 'application/json'
         headers['X-INFA-SEARCH-LANGUAGE'] = 'elasticsearch'
+        headers['X-INFA-PRODUCT-ID'] = 'CDGC'
         headers['X-INFA-ORG-ID'] =  self.org_id
         headers['Authorization'] =  'Bearer '+self.token
 
