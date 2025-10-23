@@ -201,7 +201,7 @@ Encryption related options:
         Note: This encryption is intended to obscure passwords, not provide strong cryptographic security.
 '''
 
-version = 20250820
+version = 20251023
 print(f"INFO: tag_writer {version}")
 
 script_location = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__))
@@ -431,7 +431,6 @@ def parse_parameters():
 
 
 def connect_to_idmc_and_fetch_data():
-    print(f"INFO: Connecting to Catalog as user {catalog_user}, and fetching some basic information")
 
     # Global the main variables, in case a change needs to be made
     global catalog_user, catalog_pass, encrypted_catalog_pass, idmc_pod, url_base, hawk_url_base, asset_url_base, catalog_resource_name
@@ -440,6 +439,7 @@ def connect_to_idmc_and_fetch_data():
     global unset_tags_first, writeback_tags, jdbc_driver, jdbc_url, jdbc_username, jdbc_password, encrypted_jdbc_password
     global jdbc_driver_file, debugFlag, stop_and_verify
 
+    print(f"INFO: Connecting to Catalog as user {catalog_user}, and fetching some basic information")
     
     if len(encrypted_catalog_pass) > 2:
         try:
