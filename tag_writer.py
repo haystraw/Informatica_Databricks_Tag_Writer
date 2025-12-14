@@ -171,7 +171,7 @@ Encryption options:
             --generate_key
 '''
 
-version = 20251114
+version = 20251214
 print(f"INFO: tag_writer {version}")
 
 script_location = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__))
